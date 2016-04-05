@@ -1,5 +1,5 @@
-import numpy as np
 import theano.gof
+from keras.callbacks import Callback
 from keras.layers.advanced_activations import PReLU
 from keras.layers.core import Dense, Activation, Dropout, MaskedLayer
 from keras.models import Graph
@@ -85,44 +85,13 @@ def build_model(input_size, prediction_layers, domain_layers, connection_positio
                   optimizer='rmsprop')
     return model
 
+
 def dense(size):
     return {'type': 'Dense', 'size': size}
 def dropout(p):
     return {'type': 'Dropout', 'p': p}
 def prelu():
     return {'type': 'PReLU'}
-
-
-def create_model(input_size, l=0.5, domain_loss_weight=0.2):
-
-    model = build_model(input_size,
-                        [dense(input_size), dropout(0.2),
-                         dense(300), prelu(), dropout(0.1),
-                         dense(200),
-                         dense(2)],
-                        [dense(150), prelu(), dropout(0.05),
-                         dense(100), dropout(0.01),
-                         dense(2)], 0, l, domain_loss_weight=domain_loss_weight)
-    return model
-
-
-def fit_model_channels(model, X, y, Xa, ya, wa, Xc, mc, epoch_count_train=50, epoch_count_adapt=5):
-    y = np_utils.to_categorical(y)
-
-    for _ in xrange(30):
-        model.fit({'input': X,
-                   'output': y,
-                   'domain': np.zeros_like(y)},
-                  nb_epoch=1, verbose=0,
-                  validation_split=0)
-        show_metrics(model, Xa, ya, wa, Xc, mc)
-        agreement_prediction = model.predict({'input': Xa})['output']
-        model.fit({'input': Xa,
-                   'output': agreement_prediction,
-                   'domain': np.ones_like(agreement_prediction)},
-                  nb_epoch=1, verbose=0)
-        show_metrics(model, Xa, ya, wa, Xc, mc)
-    return model
 
 
 def show_metrics(model, Xa, ya, wa, Xc, mc):
@@ -135,22 +104,32 @@ def show_metrics(model, Xa, ya, wa, Xc, mc):
     return ks, cvm
 
 
-def fit_model_mc(model, X, y, Xa, ya, wa, Xc, mc, validation_split=0.,
-                 epoch_count=75, batch_size=64):
-    #
-    # domain_mc = np.where(y == 1, 0, 1)
-    # domain_real = np.where(y == 1, 1, 0)
-    # domain_prediction = np.dstack((domain_real, domain_mc))[0]
+class ShowMetrics(Callback):
+    def __init__(self, model, Xa, ya, wa, Xc, mc):
+        self.model = model
+        self.Xa = Xa
+        self.ya = ya
+        self.wa = wa
+        self.Xc = Xc
+        self.mc = mc
+        self.ks = 0
+        self.cvm = 0
 
+    def on_epoch_end(self, epoch, logs={}):
+        self.ks, self.cvm = show_metrics(self.model, self.Xa, self.ya, self.wa, self.Xc, self.mc)
+
+    def on_train_end(self, logs={}):
+        self.ks, self.cvm = show_metrics(self.model, self.Xa, self.ya, self.wa, self.Xc, self.mc)
+
+
+def fit_model(model, X, y, Xa, ya, wa, Xc, mc, validation_split=0.,
+              epoch_count=75, batch_size=64, verbose=0):
     y = np_utils.to_categorical(y)
     domain_prediction = y
-    for _ in xrange(epoch_count):
-        model.fit({'input': X,
-               'output': y,
-               'domain': domain_prediction},
-                  nb_epoch=1, batch_size=batch_size,
-                  validation_split=validation_split, verbose=2)
-        show_metrics(model, Xa, ya, wa, Xc, mc)
+    model.fit({'input': X, 'output': y, 'domain': domain_prediction},
+              nb_epoch=epoch_count, batch_size=batch_size,
+              validation_split=validation_split, verbose=verbose,
+              callbacks=[ShowMetrics(model, Xa, ya, wa, Xc, mc)])
     return model
 
 
