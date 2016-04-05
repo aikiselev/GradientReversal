@@ -1,8 +1,9 @@
 import numpy as np
-from keras.models import Graph
-from keras.layers.core import Dense, Activation, Dropout, MaskedLayer
 from keras.layers.advanced_activations import PReLU
+from keras.layers.core import Dense, Activation, Dropout, MaskedLayer
+from keras.models import Graph
 from keras.utils import np_utils
+
 from evaluation import *
 
 
@@ -125,7 +126,7 @@ def fit_model_mc(model, X, y, Xa, ya, wa, Xc, mc, validation_split=0.,
                'output': y,
                'domain': domain_prediction},
               nb_epoch=epoch_count, batch_size=batch_size,
-              validation_split=validation_split, verbose=2)
+              validation_split=validation_split, verbose=1)
     show_metrics(model, Xa, ya, wa, Xc, mc)
     return model
 

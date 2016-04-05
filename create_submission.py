@@ -1,8 +1,10 @@
 #!/usr/bin/env python2
+from random import seed
+
+import numpy as np
+
 import data
 import model
-from random import choice, seed
-import numpy as np
 
 np.random.seed(1337)  # TODO repeatability
 seed(1337)
@@ -28,17 +30,17 @@ X_test = scaler.transform(X_test)
 print "Loaded test data"
 
 print "Creating models:"
-n_models = 3
+n_models = 1
 n_epochs = 30
 probs = None
 for i in range(n_models):
     # l = choice(xrange(1, 50))
-    l = 5
+    l = 0
     print "Model {}; l = {}".format(i, l)
     m = model.create_model(X.shape[1], l)
     # model.fit_model_channels(m, X, y, Xa, ya, wa, Xc, mc)
     model.fit_model_mc(m, X, y, Xa, ya, wa, Xc, mc,
-                       epoch_count=n_epochs, batch_size=64)
+                       epoch_count=n_epochs, batch_size=64, validation_split=0.1)
     p = model.predict_model(m, np.array(X_test))
     probs = p if probs is None else p + probs
 probs /= n_models
