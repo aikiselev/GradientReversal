@@ -31,28 +31,28 @@ print "Loaded test data"
 
 print "Creating models:"
 n_models = 1
-n_epochs = 30
+n_epochs = 50
 probs = None
 for i in range(n_models):
     # l = choice(xrange(1, 50))
-    l = 0
+    l = 1
     print "Model {}; l = {}".format(i, l)
-    m = model.create_model(X.shape[1], l)
+    m = model.create_model(X.shape[1], l, 1)
     # model.fit_model_channels(m, X, y, Xa, ya, wa, Xc, mc)
     model.fit_model_mc(m, X, y, Xa, ya, wa, Xc, mc,
-                       epoch_count=n_epochs, batch_size=64, validation_split=0.1)
+                       epoch_count=n_epochs, batch_size=64, validation_split=0.05)
     p = model.predict_model(m, np.array(X_test))
     probs = p if probs is None else p + probs
 probs /= n_models
 
-print "Fitted models"
-random_classifier = np.random.rand(len(probs))
-q = 0.98
-combined_probs = q * (probs ** 30) + (1 - q) * random_classifier
+# print "Fitted models"
+# random_classifier = np.random.rand(len(probs))
+# q = 0.98
+# combined_probs = q * (probs ** 30) + (1 - q) * random_classifier
 
 # prediction = data.decorrelate(prediction, 1)
 
-data.save_submission(ids, combined_probs, "grl_prediction.csv")
+data.save_submission(ids, probs, "grl_prediction.csv")
 
 print "Made predictions"
 

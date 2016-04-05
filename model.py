@@ -1,4 +1,5 @@
 import numpy as np
+import theano.gof
 from keras.layers.advanced_activations import PReLU
 from keras.layers.core import Dense, Activation, Dropout, MaskedLayer
 from keras.models import Graph
@@ -7,18 +8,40 @@ from keras.utils import np_utils
 from evaluation import *
 
 
+class ReverseGradient(theano.gof.Op):
+    # custom Theano operaion for gradient reversal layer
+
+    view_map = {0: [0]}
+
+    __props__ = ('hp_lambda',)
+
+    def __init__(self, hp_lambda):
+        super(ReverseGradient, self).__init__()
+        self.hp_lambda = hp_lambda
+
+    def make_node(self, x):
+        return theano.gof.graph.Apply(self, [x], [x.type.make_variable()])
+
+    def perform(self, node, inputs, output_storage):
+        xin, = inputs
+        xout, = output_storage
+        xout[0] = xin
+
+    def grad(self, input, output_gradients):
+        return [-self.hp_lambda * output_gradients[0]]
+
+
 class GradientReversal(MaskedLayer):
-    def __init__(self, **kwargs):
+    def __init__(self, l, **kwargs):
         super(GradientReversal, self).__init__(**kwargs)
+        self.op = ReverseGradient(l)  # TODO make lambda a parameter
 
     def get_output(self, train=False):
-        X = self.get_input(train)
-        if train:
-            X *= -1
-        return X
+        return self.op(self.get_input(train))
 
 
-def build_model(input_size, prediction_layers, domain_layers, connection_position, l):
+def build_model(input_size, prediction_layers, domain_layers, connection_position,
+                l, domain_loss_weight):
     model = Graph()
     model.add_input(name='input', input_shape=(input_size,))
 
@@ -45,7 +68,7 @@ def build_model(input_size, prediction_layers, domain_layers, connection_positio
     model.add_node(Activation('softmax'), name='softmax', input=last_node_name)
     model.add_output(name='output', input='softmax')
 
-    model.add_node(GradientReversal(), name='grl', input='dense{}'.format(connection_position))
+    model.add_node(GradientReversal(l), name='grl', input='dense{}'.format(connection_position))
     last_node_name = 'grl'
 
     for node in domain_layers:
@@ -57,7 +80,7 @@ def build_model(input_size, prediction_layers, domain_layers, connection_positio
                         'domain': 'categorical_crossentropy'},
                   loss_weights={
                       'output': 1,
-                      'domain': l  # lambda parameter
+                      'domain': domain_loss_weight  # lambda parameter
                   },
                   optimizer='rmsprop')
     return model
@@ -70,16 +93,16 @@ def prelu():
     return {'type': 'PReLU'}
 
 
-def create_model(input_size, l=0.5):
+def create_model(input_size, l=0.5, domain_loss_weight=0.2):
 
     model = build_model(input_size,
-                        [dense(input_size), dropout(0.5),
-                         dense(400), prelu(), dropout(0.3),
-                         dense(300),
+                        [dense(input_size), dropout(0.2),
+                         dense(300), prelu(), dropout(0.1),
+                         dense(200),
                          dense(2)],
-                        [dense(200), prelu(), dropout(0.1),
-                         dense(150), dropout(0.05),
-                         dense(2)], 1, l)
+                        [dense(150), prelu(), dropout(0.05),
+                         dense(100), dropout(0.01),
+                         dense(2)], 0, l, domain_loss_weight=domain_loss_weight)
     return model
 
 
@@ -121,13 +144,13 @@ def fit_model_mc(model, X, y, Xa, ya, wa, Xc, mc, validation_split=0.,
 
     y = np_utils.to_categorical(y)
     domain_prediction = y
-
-    model.fit({'input': X,
+    for _ in xrange(epoch_count):
+        model.fit({'input': X,
                'output': y,
                'domain': domain_prediction},
-              nb_epoch=epoch_count, batch_size=batch_size,
-              validation_split=validation_split, verbose=1)
-    show_metrics(model, Xa, ya, wa, Xc, mc)
+                  nb_epoch=1, batch_size=batch_size,
+                  validation_split=validation_split, verbose=2)
+        show_metrics(model, Xa, ya, wa, Xc, mc)
     return model
 
 
