@@ -1,4 +1,5 @@
-import numpy as np
+import theano.gof
+from keras.callbacks import Callback
 from keras.layers.advanced_activations import PReLU
 from keras.layers.core import Dense, Activation, Dropout, MaskedLayer
 from keras.models import Graph
@@ -7,18 +8,40 @@ from keras.utils import np_utils
 from evaluation import *
 
 
+class ReverseGradient(theano.gof.Op):
+    # custom Theano operaion for gradient reversal layer
+
+    view_map = {0: [0]}
+
+    __props__ = ('hp_lambda',)
+
+    def __init__(self, hp_lambda):
+        super(ReverseGradient, self).__init__()
+        self.hp_lambda = hp_lambda
+
+    def make_node(self, x):
+        return theano.gof.graph.Apply(self, [x], [x.type.make_variable()])
+
+    def perform(self, node, inputs, output_storage):
+        xin, = inputs
+        xout, = output_storage
+        xout[0] = xin
+
+    def grad(self, input, output_gradients):
+        return [-self.hp_lambda * output_gradients[0]]
+
+
 class GradientReversal(MaskedLayer):
-    def __init__(self, **kwargs):
+    def __init__(self, l, **kwargs):
         super(GradientReversal, self).__init__(**kwargs)
+        self.op = ReverseGradient(l)  # TODO make lambda a parameter
 
     def get_output(self, train=False):
-        X = self.get_input(train)
-        if train:
-            X *= -1
-        return X
+        return self.op(self.get_input(train))
 
 
-def build_model(input_size, prediction_layers, domain_layers, connection_position, l):
+def build_model(input_size, prediction_layers, domain_layers, connection_position,
+                l, domain_loss_weight):
     model = Graph()
     model.add_input(name='input', input_shape=(input_size,))
 
@@ -45,7 +68,7 @@ def build_model(input_size, prediction_layers, domain_layers, connection_positio
     model.add_node(Activation('softmax'), name='softmax', input=last_node_name)
     model.add_output(name='output', input='softmax')
 
-    model.add_node(GradientReversal(), name='grl', input='dense{}'.format(connection_position))
+    model.add_node(GradientReversal(l), name='grl', input='dense{}'.format(connection_position))
     last_node_name = 'grl'
 
     for node in domain_layers:
@@ -57,10 +80,11 @@ def build_model(input_size, prediction_layers, domain_layers, connection_positio
                         'domain': 'categorical_crossentropy'},
                   loss_weights={
                       'output': 1,
-                      'domain': l  # lambda parameter
+                      'domain': domain_loss_weight  # lambda parameter
                   },
                   optimizer='rmsprop')
     return model
+
 
 def dense(size):
     return {'type': 'Dense', 'size': size}
@@ -68,38 +92,6 @@ def dropout(p):
     return {'type': 'Dropout', 'p': p}
 def prelu():
     return {'type': 'PReLU'}
-
-
-def create_model(input_size, l=0.5):
-
-    model = build_model(input_size,
-                        [dense(input_size), dropout(0.5),
-                         dense(400), prelu(), dropout(0.3),
-                         dense(300),
-                         dense(2)],
-                        [dense(200), prelu(), dropout(0.1),
-                         dense(150), dropout(0.05),
-                         dense(2)], 1, l)
-    return model
-
-
-def fit_model_channels(model, X, y, Xa, ya, wa, Xc, mc, epoch_count_train=50, epoch_count_adapt=5):
-    y = np_utils.to_categorical(y)
-
-    for _ in xrange(30):
-        model.fit({'input': X,
-                   'output': y,
-                   'domain': np.zeros_like(y)},
-                  nb_epoch=1, verbose=0,
-                  validation_split=0)
-        show_metrics(model, Xa, ya, wa, Xc, mc)
-        agreement_prediction = model.predict({'input': Xa})['output']
-        model.fit({'input': Xa,
-                   'output': agreement_prediction,
-                   'domain': np.ones_like(agreement_prediction)},
-                  nb_epoch=1, verbose=0)
-        show_metrics(model, Xa, ya, wa, Xc, mc)
-    return model
 
 
 def show_metrics(model, Xa, ya, wa, Xc, mc):
@@ -112,22 +104,32 @@ def show_metrics(model, Xa, ya, wa, Xc, mc):
     return ks, cvm
 
 
-def fit_model_mc(model, X, y, Xa, ya, wa, Xc, mc, validation_split=0.,
-                 epoch_count=75, batch_size=64):
-    #
-    # domain_mc = np.where(y == 1, 0, 1)
-    # domain_real = np.where(y == 1, 1, 0)
-    # domain_prediction = np.dstack((domain_real, domain_mc))[0]
+class ShowMetrics(Callback):
+    def __init__(self, model, Xa, ya, wa, Xc, mc):
+        self.model = model
+        self.Xa = Xa
+        self.ya = ya
+        self.wa = wa
+        self.Xc = Xc
+        self.mc = mc
+        self.ks = 0
+        self.cvm = 0
 
+    def on_epoch_end(self, epoch, logs={}):
+        self.ks, self.cvm = show_metrics(self.model, self.Xa, self.ya, self.wa, self.Xc, self.mc)
+
+    def on_train_end(self, logs={}):
+        self.ks, self.cvm = show_metrics(self.model, self.Xa, self.ya, self.wa, self.Xc, self.mc)
+
+
+def fit_model(model, X, y, Xa, ya, wa, Xc, mc, validation_split=0.,
+              epoch_count=75, batch_size=64, verbose=0):
     y = np_utils.to_categorical(y)
     domain_prediction = y
-
-    model.fit({'input': X,
-               'output': y,
-               'domain': domain_prediction},
+    model.fit({'input': X, 'output': y, 'domain': domain_prediction},
               nb_epoch=epoch_count, batch_size=batch_size,
-              validation_split=validation_split, verbose=1)
-    show_metrics(model, Xa, ya, wa, Xc, mc)
+              validation_split=validation_split, verbose=verbose,
+              callbacks=[ShowMetrics(model, Xa, ya, wa, Xc, mc)])
     return model
 
 

@@ -35,8 +35,8 @@ def load(data_file, tail=None, weight=False, mass=False, shuffle=False, ids=Fals
     if shuffle:
         data = data.iloc[np.random.permutation(len(data))].reset_index(drop=True)
 
-    filter_out = ['id', 'min_ANNmuon', 'production', 'mass', 'weight', 'signal',  # ]
-                  'SPDhits']  # 'IP']  # , 'isolationc', 'SPDhits', 'IPSig']
+    filter_out = ['id', 'min_ANNmuon', 'production', 'mass', 'weight', 'signal']
+    # 'IP']  # , 'isolationc', 'SPDhits', 'IPSig']
     features = list(f for f in data.columns if f not in filter_out)
     X = data[features].values
     y = data['signal'].values if not test else None
