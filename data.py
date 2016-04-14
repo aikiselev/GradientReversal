@@ -27,7 +27,7 @@ def add_features(df):
 
 def load(data_file, tail=None, weight=False, mass=False, shuffle=False, ids=False, test=False):
     data = pd.read_csv(data_file)
-    data = add_features(data)
+    # data = add_features(data) TODO add features
     if tail is not None:
         data = data[-tail:]
 
@@ -49,7 +49,7 @@ def load(data_file, tail=None, weight=False, mass=False, shuffle=False, ids=Fals
 def preprocess_data(X, scaler=None):
     if not scaler:
         scaler = StandardScaler()
-        scaler.fit(X)
+    scaler.partial_fit(X)
     X = scaler.transform(X)
     return X, scaler
 

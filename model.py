@@ -10,7 +10,6 @@ from evaluation import *
 
 class ReverseGradient(theano.gof.Op):
     # custom Theano operaion for gradient reversal layer
-
     view_map = {0: [0]}
 
     __props__ = ('hp_lambda',)
@@ -94,32 +93,40 @@ def prelu():
     return {'type': 'PReLU'}
 
 
-def show_metrics(model, Xa, ya, wa, Xc, mc):
+def show_metrics(model, Xa, ya, wa, Xc, mc, X, y):
     pa = predict_model(model, Xa)
     ks = compute_ks(pa[ya == 0], pa[ya == 1], wa[ya == 0], wa[ya == 1])
 
     pc = predict_model(model, Xc)
     cvm = compute_cvm(pc, mc)
-    print "KS: {} : 0.09 / CvM: {} : 0.002".format(ks, cvm)
-    return ks, cvm
+
+    p = predict_model(model, X)
+    auc = roc_auc_truncated(y[:, 1], p)
+    print("KS: {} : 0.09 / CvM: {} : 0.002 / AUC: {}".format(ks, cvm, auc))
+    return ks, cvm, auc
 
 
 class ShowMetrics(Callback):
-    def __init__(self, model, Xa, ya, wa, Xc, mc):
+    def __init__(self, model, Xa, ya, wa, Xc, mc, X, y):
         self.model = model
         self.Xa = Xa
         self.ya = ya
         self.wa = wa
         self.Xc = Xc
         self.mc = mc
+        self.X = X
+        self.y = y
         self.ks = 0
         self.cvm = 0
+        self.auc = 0
 
     def on_epoch_end(self, epoch, logs={}):
-        self.ks, self.cvm = show_metrics(self.model, self.Xa, self.ya, self.wa, self.Xc, self.mc)
+        self.ks, self.cvm, self.auc = show_metrics(self.model, self.Xa, self.ya, self.wa,
+                                                   self.Xc, self.mc, self.X, self.y)
 
     def on_train_end(self, logs={}):
-        self.ks, self.cvm = show_metrics(self.model, self.Xa, self.ya, self.wa, self.Xc, self.mc)
+        self.ks, self.cvm, self.auc = show_metrics(self.model, self.Xa, self.ya, self.wa,
+                                                   self.Xc, self.mc, self.X, self.y)
 
 
 def fit_model(model, X, y, Xa, ya, wa, Xc, mc, validation_split=0.,
@@ -129,7 +136,7 @@ def fit_model(model, X, y, Xa, ya, wa, Xc, mc, validation_split=0.,
     model.fit({'input': X, 'output': y, 'domain': domain_prediction},
               nb_epoch=epoch_count, batch_size=batch_size,
               validation_split=validation_split, verbose=verbose,
-              callbacks=[ShowMetrics(model, Xa, ya, wa, Xc, mc)])
+              callbacks=[ShowMetrics(model, Xa, ya, wa, Xc, mc, X, y)])
     return model
 
 
