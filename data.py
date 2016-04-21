@@ -36,7 +36,6 @@ def load(data_file, tail=None, weight=False, mass=False, shuffle=False, ids=Fals
         data = data.iloc[np.random.permutation(len(data))].reset_index(drop=True)
 
     filter_out = ['id', 'min_ANNmuon', 'production', 'mass', 'weight', 'signal']
-    # 'IP']  # , 'isolationc', 'SPDhits', 'IPSig']
     features = list(f for f in data.columns if f not in filter_out)
     X = data[features].values
     y = data['signal'].values if not test else None
@@ -49,7 +48,7 @@ def load(data_file, tail=None, weight=False, mass=False, shuffle=False, ids=Fals
 def preprocess_data(X, scaler=None):
     if not scaler:
         scaler = StandardScaler()
-        scaler.fit(X)
+    scaler.partial_fit(X)
     X = scaler.transform(X)
     return X, scaler
 
