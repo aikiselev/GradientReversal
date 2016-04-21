@@ -27,7 +27,7 @@ def add_features(df):
 
 def load(data_file, tail=None, weight=False, mass=False, shuffle=False, ids=False, test=False):
     data = pd.read_csv(data_file)
-    # data = add_features(data) TODO add features
+    data = add_features(data)
     if tail is not None:
         data = data[-tail:]
 
@@ -36,7 +36,6 @@ def load(data_file, tail=None, weight=False, mass=False, shuffle=False, ids=Fals
         data = data.iloc[np.random.permutation(len(data))].reset_index(drop=True)
 
     filter_out = ['id', 'min_ANNmuon', 'production', 'mass', 'weight', 'signal']
-    # 'IP']  # , 'isolationc', 'SPDhits', 'IPSig']
     features = list(f for f in data.columns if f not in filter_out)
     X = data[features].values
     y = data['signal'].values if not test else None

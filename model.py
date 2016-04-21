@@ -2,7 +2,7 @@ import theano.gof
 from keras.callbacks import Callback
 from keras.layers.advanced_activations import PReLU
 from keras.layers.core import Dense, Activation, Dropout, MaskedLayer
-from keras.models import Graph
+from keras.models import Graph, Sequential
 from keras.utils import np_utils
 
 from evaluation import *
@@ -37,6 +37,26 @@ class GradientReversal(MaskedLayer):
 
     def get_output(self, train=False):
         return self.op(self.get_input(train))
+
+
+def build_sequential_model(input_size, hidden_layers, output_size):
+    m = Sequential()
+
+    def connect(layer):
+        if layer['type'] == 'Dense':
+            m.add(Dense(layer['size']))
+        if layer['type'] == 'Dropout':
+            m.add(Dropout(layer['p']))
+        if layer['type'] == 'PReLU':
+            m.add(PReLU())
+
+    m.add(Dense(hidden_layers[0]['size'], input_dim=input_size))
+    for layer in hidden_layers[1:]:
+        connect(layer)
+    connect(dense(output_size))
+    m.add(Activation('softmax'))
+    m.compile(loss='categorical_crossentropy', optimizer='rmsprop')
+    return m
 
 
 def build_model(input_size, prediction_layers, domain_layers, connection_position,
@@ -94,13 +114,13 @@ def prelu():
 
 
 def show_metrics(model, Xa, ya, wa, Xc, mc, X, y):
-    pa = predict_model(model, Xa)
+    pa = predict_probs_model(model, Xa)
     ks = compute_ks(pa[ya == 0], pa[ya == 1], wa[ya == 0], wa[ya == 1])
 
-    pc = predict_model(model, Xc)
+    pc = predict_probs_model(model, Xc)
     cvm = compute_cvm(pc, mc)
 
-    p = predict_model(model, X)
+    p = predict_probs_model(model, X)
     auc = roc_auc_truncated(y[:, 1], p)
     print("KS: {} : 0.09 / CvM: {} : 0.002 / AUC: {}".format(ks, cvm, auc))
     return ks, cvm, auc
@@ -129,16 +149,24 @@ class ShowMetrics(Callback):
                                                    self.Xc, self.mc, self.X, self.y)
 
 
-def fit_model(model, X, y, Xa, ya, wa, Xc, mc, validation_split=0.,
-              epoch_count=75, batch_size=64, verbose=0):
-    y = np_utils.to_categorical(y)
-    domain_prediction = y
+def fit_model(model, X, y, domain_prediction, Xa, ya, wa, Xc, mc, X_original, y_original,
+              validation_split=0., epoch_count=75, batch_size=64, verbose=0, show_metrics=False):
+    callbacks = [
+        ShowMetrics(model, Xa, ya, wa, Xc, mc, X_original, np_utils.to_categorical(y_original))] \
+        if show_metrics is True else []
     model.fit({'input': X, 'output': y, 'domain': domain_prediction},
               nb_epoch=epoch_count, batch_size=batch_size,
               validation_split=validation_split, verbose=verbose,
-              callbacks=[ShowMetrics(model, Xa, ya, wa, Xc, mc, X, y)])
-    return model
+              callbacks=callbacks)
+    f = model.nodes['feature_extractor']
+    l = model.nodes['label_classifier']
+    d = model.nodes['domain_classifier']
+    return f, l, d
 
 
 def predict_model(model, X):
+    return model.predict({'input': X}, batch_size=256, verbose=0)['output']
+
+
+def predict_probs_model(model, X):
     return model.predict({'input': X}, batch_size=256, verbose=0)['output'][:, 1]
