@@ -1,15 +1,15 @@
 import theano.gof
 from keras.callbacks import Callback
-from keras.layers.advanced_activations import PReLU
-from keras.layers.core import Dense, Activation, Dropout, MaskedLayer
-from keras.models import Graph, Sequential
+from keras.engine.topology import Layer
+from keras.layers import Input
+from keras.models import Model, Sequential
 from keras.utils import np_utils
 
 from evaluation import *
 
 
 class ReverseGradient(theano.gof.Op):
-    # custom Theano operaion for gradient reversal layer
+    # Custom Theano operaion for gradient reversal layer
     view_map = {0: [0]}
 
     __props__ = ('hp_lambda',)
@@ -30,87 +30,36 @@ class ReverseGradient(theano.gof.Op):
         return [-self.hp_lambda * output_gradients[0]]
 
 
-class GradientReversal(MaskedLayer):
+class GradientReversal(Layer):
+    # Gradient reversal layer, described in http://arxiv.org/pdf/1409.7495.pdf
     def __init__(self, l, **kwargs):
-        super(GradientReversal, self).__init__(**kwargs)
-        self.op = ReverseGradient(l)  # TODO make lambda a parameter
+        super().__init__(**kwargs)
+        self.op = ReverseGradient(l)
 
-    def get_output(self, train=False):
-        return self.op(self.get_input(train))
+    def call(self, x, mask=None):
+        return self.op(x)
 
 
-def build_sequential_model(input_size, hidden_layers, output_size):
-    m = Sequential()
-
-    def connect(layer):
-        if layer['type'] == 'Dense':
-            m.add(Dense(layer['size']))
-        if layer['type'] == 'Dropout':
-            m.add(Dropout(layer['p']))
-        if layer['type'] == 'PReLU':
-            m.add(PReLU())
-
-    m.add(Dense(hidden_layers[0]['size'], input_dim=input_size))
-    for layer in hidden_layers[1:]:
-        connect(layer)
-    connect(dense(output_size))
-    m.add(Activation('softmax'))
-    m.compile(loss='categorical_crossentropy', optimizer='rmsprop')
+def build_sequential_model(hidden_layers, name=""):
+    m = Sequential(name=name)
+    for layer in hidden_layers:
+        m.add(layer)
     return m
 
 
-def build_model(input_size, prediction_layers, domain_layers, connection_position,
-                l, domain_loss_weight):
-    model = Graph()
-    model.add_input(name='input', input_shape=(input_size,))
+def create_clf(feature_extractor, label_classifier, domain_classifier, lam):
+    model_input = Input(shape=(feature_extractor.input_shape[1],))
+    features = feature_extractor(model_input)
 
-    counts = [0, 0, 0]
-    last_node_name = 'input'
+    label_class = label_classifier(features)
 
-    def connect(last_node_name, node):
-        if node['type'] == 'Dense':
-            layer_name = 'dense{}'.format(counts[0])
-            model.add_node(Dense(node['size']), name=layer_name, input=last_node_name)
-            counts[0] += 1
-        if node['type'] == 'Dropout':
-            layer_name = 'drop{}'.format(counts[1])
-            model.add_node(Dropout(node['p']), name=layer_name, input=last_node_name)
-            counts[1] += 1
-        if node['type'] == 'PReLU':
-            layer_name = 'prelu{}'.format(counts[2])
-            model.add_node(PReLU(), name=layer_name, input=last_node_name)
-            counts[2] += 1
-        return layer_name
+    grl = GradientReversal(lam, input_shape=(domain_classifier.input_shape[1],))
+    domain_class = domain_classifier(grl(features))
 
-    for node in prediction_layers:
-        last_node_name = connect(last_node_name, node)
-    model.add_node(Activation('softmax'), name='softmax', input=last_node_name)
-    model.add_output(name='output', input='softmax')
-
-    model.add_node(GradientReversal(l), name='grl', input='dense{}'.format(connection_position))
-    last_node_name = 'grl'
-
-    for node in domain_layers:
-        last_node_name = connect(last_node_name, node)
-    model.add_node(Activation('softmax'), name='softmax_domain', input=last_node_name)
-    model.add_output(name='domain', input='softmax_domain')
-
-    model.compile(loss={'output': 'categorical_crossentropy',
-                        'domain': 'categorical_crossentropy'},
-                  loss_weights={
-                      'output': 1,
-                      'domain': domain_loss_weight  # lambda parameter
-                  },
-                  optimizer='rmsprop')
-    return model
-
-
-def dense(size):
-    return {'type': 'Dense', 'size': size}
-def dropout(p):
-    return {'type': 'Dropout', 'p': p}
-def prelu():
-    return {'type': 'PReLU'}
+    m = Model(input=[model_input], output=[label_class, domain_class])
+    m.compile(loss=['categorical_crossentropy', 'categorical_crossentropy'],
+              loss_weights=[1, 1], metrics=['accuracy', 'accuracy'], optimizer='rmsprop')
+    return m
 
 
 def show_metrics(model, Xa, ya, wa, Xc, mc, X, y):
@@ -154,19 +103,19 @@ def fit_model(model, X, y, domain_prediction, Xa, ya, wa, Xc, mc, X_original, y_
     callbacks = [
         ShowMetrics(model, Xa, ya, wa, Xc, mc, X_original, np_utils.to_categorical(y_original))] \
         if show_metrics is True else []
-    model.fit({'input': X, 'output': y, 'domain': domain_prediction},
+    model.fit([X], [y, domain_prediction],
               nb_epoch=epoch_count, batch_size=batch_size,
               validation_split=validation_split, verbose=verbose,
               callbacks=callbacks)
-    f = model.nodes['feature_extractor']
-    l = model.nodes['label_classifier']
-    d = model.nodes['domain_classifier']
+    f = model.get_layer('feature_extractor')
+    l = model.get_layer('label_classifier')
+    d = model.get_layer('domain_classifier')
     return f, l, d
 
 
 def predict_model(model, X):
-    return model.predict({'input': X}, batch_size=256, verbose=0)['output']
+    return model.predict([X], batch_size=256, verbose=0)[0]
 
 
 def predict_probs_model(model, X):
-    return model.predict({'input': X}, batch_size=256, verbose=0)['output'][:, 1]
+    return model.predict([X], batch_size=256, verbose=0)[0][:, 1]
