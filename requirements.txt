@@ -1,2 +1,3 @@
+theano >= 0.8.2
 pandas
-keras
+keras >= 1.0.1
