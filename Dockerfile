@@ -1,4 +1,4 @@
-FROM aikiselev/GradientReverse
+FROM andrewosh/binder-base
 
 USER root
 
