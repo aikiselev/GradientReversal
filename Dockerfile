@@ -7,7 +7,7 @@ USER root
 RUN apt-get update
 
 # Git LFS
-RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash
+RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | os=debian bash
 RUN apt-get install -y git-lfs
 RUN git lfs install
 
