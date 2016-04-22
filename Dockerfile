@@ -5,7 +5,6 @@ MAINTAINER Anton Kiselev <straw.berry.pie@ya.ru>
 USER root
 
 RUN apt-get update
+RUN pip install -r requirements.txt
 
-# Git LFS
-RUN pip install --upgrade theano keras pandas
 USER main
