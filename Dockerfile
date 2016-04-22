@@ -7,8 +7,8 @@ USER root
 RUN apt-get update
 
 # Git LFS
-RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | os=debian bash
-RUN apt-get install -y git-lfs
+RUN wget https://packagecloud.io/github/git-lfs/packages/debian/jessie/git-lfs_1.2.0_amd64.deb/download
+RUN chmod +x download && dpkg -i download
 RUN git lfs install
 
 # CUDA
