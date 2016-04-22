@@ -55,6 +55,8 @@ probs = None
 for i in range(n_models):
     from keras.utils import np_utils
 
+    y_categorical = np_utils.to_categorical(y)
+
     domain_weight = 1
     np.random.seed(42)  # repeatability
 
@@ -68,10 +70,12 @@ for i in range(n_models):
     # Learning on train
 
     m = create_clf(f, l, d, 0)
-    f, l, d = model.fit_model(m, X, np_utils.to_categorical(y), np_utils.to_categorical(y), Xa, ya,
+    metrics_callback = model.ShowMetrics(m, Xa, ya, wa, Xc, mc, X, y_categorical)
+    f, l, d = model.fit_model(m, X, y_categorical, y_categorical, Xa, ya,
                               wa, Xc, mc, X, y,
                               epoch_count=int((1 - transfering_ratio) * n_epochs),
-                              batch_size=128, validation_split=0.05, verbose=2, show_metrics=True)
+                              batch_size=128, validation_split=0.05, verbose=2,
+                              callbacks=[metrics_callback])
     # Transfering to check_agreement
     ya_output = model.predict_model(m, np.array(Xa_train))
     steps = 20
