@@ -12,4 +12,3 @@ RUN chmod +x download && dpkg -i download
 RUN git lfs install
 
 USER main
-RUN git lfs fetch
