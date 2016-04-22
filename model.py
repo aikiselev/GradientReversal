@@ -3,7 +3,6 @@ from keras.callbacks import Callback
 from keras.engine.topology import Layer
 from keras.layers import Input
 from keras.models import Model, Sequential
-from keras.utils import np_utils
 
 from evaluation import *
 
@@ -85,24 +84,19 @@ class ShowMetrics(Callback):
         self.mc = mc
         self.X = X
         self.y = y
-        self.ks = 0
-        self.cvm = 0
-        self.auc = 0
+        self.history = []
 
     def on_epoch_end(self, epoch, logs={}):
-        self.ks, self.cvm, self.auc = show_metrics(self.model, self.Xa, self.ya, self.wa,
-                                                   self.Xc, self.mc, self.X, self.y)
+        self.history += show_metrics(self.model, self.Xa, self.ya, self.wa,
+                                     self.Xc, self.mc, self.X, self.y)
 
     def on_train_end(self, logs={}):
-        self.ks, self.cvm, self.auc = show_metrics(self.model, self.Xa, self.ya, self.wa,
-                                                   self.Xc, self.mc, self.X, self.y)
+        self.history += show_metrics(self.model, self.Xa, self.ya, self.wa,
+                                     self.Xc, self.mc, self.X, self.y)
 
 
 def fit_model(model, X, y, domain_prediction, Xa, ya, wa, Xc, mc, X_original, y_original,
-              validation_split=0., epoch_count=75, batch_size=64, verbose=0, show_metrics=False):
-    callbacks = [
-        ShowMetrics(model, Xa, ya, wa, Xc, mc, X_original, np_utils.to_categorical(y_original))] \
-        if show_metrics is True else []
+              validation_split=0., epoch_count=75, batch_size=64, verbose=0, callbacks=[]):
     model.fit([X], [y, domain_prediction],
               nb_epoch=epoch_count, batch_size=batch_size,
               validation_split=validation_split, verbose=verbose,
