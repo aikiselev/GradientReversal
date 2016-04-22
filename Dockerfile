@@ -12,10 +12,10 @@ RUN chmod +x download && dpkg -i download
 RUN git lfs install
 
 # CUDA
-RUN wget http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1504/x86_64/cuda-repo-ubuntu1504_7.5-18_amd64.deb
-RUN dpkg -i cuda-repo-ubuntu1504_7.5-18_amd64.deb
+RUN wget http://developer.download.nvidia.com/compute/cuda/7.5/Prod/local_installers/cuda-repo-ubuntu1504-7-5-local_7.5-18_amd64.deb
+RUN dpkg -i cuda-repo-ubuntu1504-7-5-local_7.5-18_amd64.deb
 RUN apt-get update
-RUN apt-get install cuda
+RUN apt-get install -y cuda
 
 USER main
 RUN git lfs fetch
