@@ -87,12 +87,14 @@ class ShowMetrics(Callback):
         self.history = []
 
     def on_epoch_end(self, epoch, logs={}):
-        self.history += show_metrics(self.model, self.Xa, self.ya, self.wa,
+        ks, cvm, auc = show_metrics(self.model, self.Xa, self.ya, self.wa,
                                      self.Xc, self.mc, self.X, self.y)
+        self.history.append((ks, cvm, auc))
 
     def on_train_end(self, logs={}):
-        self.history += show_metrics(self.model, self.Xa, self.ya, self.wa,
+        ks, cvm, auc = show_metrics(self.model, self.Xa, self.ya, self.wa,
                                      self.Xc, self.mc, self.X, self.y)
+        self.history.append((ks, cvm, auc))
 
 
 def fit_model(model, X, y, domain_prediction, Xa, ya, wa, Xc, mc, X_original, y_original,
