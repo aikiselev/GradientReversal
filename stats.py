@@ -20,7 +20,10 @@ class ShowMetrics(Callback):
         self.history_auc = []
         self.verbose = verbose
 
-    def get_metrics(self, Xa, ya, wa, Xc, mc, X, y):
+    def get_history(self):
+        return self.history_ks, self.history_cvm, self.history_auc
+
+    def calculate_metrics(self, Xa, ya, wa, Xc, mc, X, y):
         pa = predict_probs(self.model, Xa)
         ks = compute_ks(pa[ya == 0], pa[ya == 1], wa[ya == 0], wa[ya == 1])
 
@@ -32,8 +35,8 @@ class ShowMetrics(Callback):
         return ks, cvm, auc
 
     def update_statistics(self):
-        ks, cvm, auc = self.get_metrics(self.Xa, self.ya, self.wa,
-                                        self.Xc, self.mc, self.X, self.y)
+        ks, cvm, auc = self.calculate_metrics(self.Xa, self.ya, self.wa,
+                                              self.Xc, self.mc, self.X, self.y)
         if self.verbose:
             print("KS: {} : 0.09 / CvM: {} : 0.002 / AUC: {}".format(ks, cvm, auc))
         self.history_ks.append(ks)
