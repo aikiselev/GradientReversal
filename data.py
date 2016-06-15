@@ -27,7 +27,7 @@ def add_features(df):
 
 def load(data_file, tail=None, weight=False, mass=False, shuffle=False, ids=False, test=False):
     data = pd.read_csv(data_file)
-    data = add_features(data)
+    # data = add_features(data)
     if tail is not None:
         data = data[-tail:]
 

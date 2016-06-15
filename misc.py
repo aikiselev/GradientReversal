@@ -8,8 +8,14 @@ class SetterProperty(object):
 
 
 def predict(m, x):
-    return m.predict([x], batch_size=256, verbose=0)[0]
+    if m.classifier_type == 'classic':
+        return m.predict([x], batch_size=256, verbose=0)
+    else:
+        return m.predict([x], batch_size=256, verbose=0)[0]
 
 
 def predict_probs(m, x):
-    return m.predict([x], batch_size=256, verbose=0)[0][:, 1]
+    if m.classifier_type == 'classic':
+        return m.predict([x], batch_size=256, verbose=0)[:, 1]
+    else:
+        return m.predict([x], batch_size=256, verbose=0)[0][:, 1]

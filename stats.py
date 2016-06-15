@@ -7,7 +7,7 @@ from misc import predict_probs
 class ShowMetrics(Callback):
     def __init__(self, model, Xa, ya, wa, Xc, mc, X, y, verbose=False):
         super().__init__()
-        self.model = model
+        self._model = model
         self.Xa = Xa
         self.ya = ya
         self.wa = wa
@@ -24,13 +24,13 @@ class ShowMetrics(Callback):
         return self.history_ks, self.history_cvm, self.history_auc
 
     def calculate_metrics(self, Xa, ya, wa, Xc, mc, X, y):
-        pa = predict_probs(self.model, Xa)
+        pa = self._model.predict_probs(Xa)
         ks = compute_ks(pa[ya == 0], pa[ya == 1], wa[ya == 0], wa[ya == 1])
 
-        pc = predict_probs(self.model, Xc)
+        pc = self._model.predict_probs(Xc)
         cvm = compute_cvm(pc, mc)
 
-        p = predict_probs(self.model, X)
+        p = self._model.predict_probs(X)
         auc = roc_auc_truncated(y[:, 1], p)
         return ks, cvm, auc
 
